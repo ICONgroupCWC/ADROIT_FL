@@ -12,11 +12,12 @@ def create_message(batch_size, learning_rate, epochs, model, modelParam, transfo
     return pickle.dumps(data)
 
 
-def create_message_results(accuracy, train_loss, test_loss, cur_round, elapsed_time, tot_bytes, final_round=False,
-                           weights=None):
+def create_message_results(accuracy, train_loss, test_loss, cur_round, elapsed_time, tot_bytes,  final_round=False,
+                           weights=None, energy=0):
+    print('create msg energy ' + str(energy))
     data = {'status': 'results', 'accuracy': str(accuracy[-1]), 'train_loss': str(train_loss[-1]),
             'test_loss': str(test_loss[-1]),
-            "round": str(cur_round), "round_time": str(elapsed_time[-1]), 'total_bytes': str(tot_bytes[-1])}
+            "round": str(cur_round), "round_time": str(elapsed_time[-1]), 'total_bytes': str(tot_bytes[-1]), 'energy_per_round':float(energy)}
 
     if final_round:
         data['final'] = True

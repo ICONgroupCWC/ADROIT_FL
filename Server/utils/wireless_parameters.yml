@@ -1,0 +1,5 @@
+num_iterations: 1000
+area_size: 1000
+transmission_power: 100e-3
+bandwidth: 2e6
+noise_spectral_density: 1e-9

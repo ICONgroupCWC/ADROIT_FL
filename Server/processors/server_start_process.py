@@ -17,6 +17,7 @@ from Server.DataLoaders.loaderUtil import getDataloader
 from Server.utils.message_utils import create_message, create_message_results
 from Server.utils.modelUtil import get_criterion
 from Server.utils.Scheduler import Scheduler
+from Server.utils.wireless_utils import calculate_energy_per_round
 import time
 
 
@@ -41,11 +42,14 @@ class JobServer:
     def testing(self, model, preprocessing, bs, criterion):
 
         dataset, labels = self.load_dataset(preprocessing['folder'])
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        # Reshape to 2D for fitting scaler
-        reshaped_data = dataset.reshape(-1, dataset.shape[-1])
-        dataset = scaler.fit(reshaped_data)
-
+        # scaler = MinMaxScaler(feature_range=(0, 1))
+        # # Reshape to 2D for fitting scaler
+        # print('dataset shape before transforming ' + str(dataset.shape))
+        # reshaped_data = dataset.reshape(-1, dataset.shape[-1])
+        # print('reshape shape ' + str(dataset.shape))
+        # scaled_data = scaler.fit_transform(reshaped_data)
+        # # Reshape back to original shape
+        # dataset = scaled_data.reshape(dataset.shape)
         test_loss = 0
         correct = 0
         test_loader = DataLoader(getDataloader(dataset, labels, preprocessing), batch_size=bs, shuffle=False)
@@ -70,7 +74,8 @@ class JobServer:
                 print("Label shape:", label.shape)
 
                 predicted_values = output.detach().cpu().numpy().squeeze()
-                scaler.inverse_transform(predicted_values)
+                # predicted_values = predicted_values.reshape(-1, 1)
+                # predicted_values = scaler.inverse_transform(predicted_values)
                 actual_values = label.detach().cpu().numpy()
 
                 # Round the values
@@ -89,6 +94,8 @@ class JobServer:
                 test_accuracy = (matches / total) * 100
 
         return test_loss, test_accuracy
+
+
 
     async def connector(self, client_uri, data, client_index, server_socket):
         """connector function for connecting the server to the clients. This function is called asynchronously to
@@ -224,10 +231,7 @@ class JobServer:
                             scale = float(job_data['modelParam']['scale'])
                             server_param.data += dequantize_tensor(self.q_diff[i][count], scale, z_point,
                                                                    self.info[i][count]) / len(self.q_diff)
-                        else:
 
-                            server_param.data += decompress_tensor(self.v[i][count], self.i[i][count],
-                                                                   self.s[i][count]) / len(self.v)
                         count += 1
 
                 global_weights = model.state_dict()
@@ -268,27 +272,25 @@ class JobServer:
                 tot_bytes = self.bytes[-1] / 1e6
             total_bytes.append(round(tot_bytes, 2))
 
-            # with open('test_accuracy.txt', 'a') as fw:
-            #     fw.write(str(test_accuracy) + '\n')
-            #
-            # with open('test_loss.txt', 'a') as fw:
-            #     fw.write(str(test_loss) + '\n')
-            #
-            # with open('elapsed_time.txt', 'a') as fw:
-            #     fw.write(str(round_times) + '\n')
-            #
-            # with open('bytes.txt', 'a') as fw:r5
-            #     fw.write(str(total_bytes) + '\n')
 
             if curr_round == T:
+
+                print('FL training completed. Final model saved at clients')
+                if compress and compress == 'quantize':
+                    model_size_bits = sum(p.numel() for p in model.parameters()) * int(job_data['modelParam']['num_bits'])
+                    energy_per_round = calculate_energy_per_round(model_size_bits, data['avg_bitrate'])
+                else:
+                    model_size_bits = sum(p.numel() for p in model.parameters()) * 32
+                    energy_per_round = calculate_energy_per_round(model_size_bits, data['avg_bitrate'])
+                print('energy per round ' + str(energy_per_round))
                 serialized_results = create_message_results(test_accuracy, train_loss, test_loss, curr_round,
                                                             round_times,
-                                                            total_bytes, True)
+                                                            total_bytes, True, energy=energy_per_round)
             else:
                 serialized_results = create_message_results(test_accuracy, train_loss, test_loss, curr_round,
                                                             round_times,
                                                             total_bytes, False)
 
-            if curr_round == T:
-                print('FL training completed. Final model saved at clients')
+
+
             await websocket.send(serialized_results)

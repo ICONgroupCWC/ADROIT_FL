@@ -18,10 +18,10 @@ async def start_fl():
     lr = 0.001
     task_name = 'mnist_fl'
     epochs = 1
-    minibatch = 4096
+    minibatch = 64
     client_fraction = 0.7
     minibatch_test = 4096
-    comm_rounds = 20
+    comm_rounds = 1
     optimizer = 'Adam'
     loss = 'Huber'
     folder = 'satellite'
@@ -36,7 +36,8 @@ async def start_fl():
                        "lr": str(lr), "scheduler": "random", "clientFraction": str(client_fraction),
                        "minibatchtest": str(minibatch_test),
                        "comRounds": str(comm_rounds)},
-            "modelParam": {"optimizer": str(optimizer), "loss": str(loss), "compress": False},
+            "modelParam": {"optimizer": str(optimizer), "loss": str(loss), "compress": 'quantize', 'z_point': 0.0,
+                           'scale': 0.1, 'num_bits': 16},
             "preprocessing": {"dtype": "regression", "folder": str(folder), "testfolder": str(folder),
                               "normalize": False}}}
 
@@ -62,6 +63,7 @@ async def start_fl():
                             message['accuracy']))
                     else:
                         print('Final communication round completed with accuracy ' + str(message['accuracy']))
+                        print(f"Energy Required to Transmit the Model: {float(message['energy_per_round']):.2f} Joules per round")
 
                 if message['status'] == 'results':
                     test_accuracy.append(float(message['accuracy']))
