@@ -1,8 +1,10 @@
 from torch.utils.data import Dataset
 
-from .TextDataset import TextDataset
-from .ImageDataset import ImageDataset
-from .RegressionDataset import  RegressionDataset
+from DataLoaders.ImageDataset import ImageDataset
+from DataLoaders.RegressionDataset import RegressionDataset
+from DataLoaders.TextDataset import TextDataset
+
+
 def getDataloader(dataset, labels, dataops):
 
     if dataops['dtype'] == 'img':

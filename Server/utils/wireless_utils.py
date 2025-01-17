@@ -3,7 +3,7 @@ import numpy as np
 
 
 def calculate_avg_bit_rate(num_users):
-    with open('wireless_parameters.yml', 'r') as file:
+    with open('utils/wireless_parameters.yml', 'r') as file:
         wireless_data = yaml.safe_load(file)
 
     area_size = float(wireless_data['area_size'])
@@ -43,7 +43,7 @@ def calculate_avg_bit_rate(num_users):
 
 def calculate_energy_per_round(model_size, avg_bit_rate):
 
-    with open('wireless_parameters.yml', 'r') as file:
+    with open('utils/wireless_parameters.yml', 'r') as file:
         wireless_data = yaml.safe_load(file)
     Pt = float(wireless_data['transmission_power'])
     transmission_time = model_size / avg_bit_rate  # Time to transmit the model

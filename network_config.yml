@@ -1,9 +1,9 @@
 host: "localhost:8200"
 clients:
-  - client_ip: "localhost:5000"
+  - client_ip: "172.17.0.1:5000"
     client_id: "client1"
-  - client_ip: "localhost:5001"
+  - client_ip: "172.17.0.1:5001"
     client_id: "client2"
-  - client_ip: "localhost:5002"
+  - client_ip: "172.17.0.1:5002"
     client_id: "client3"
 

@@ -2,10 +2,8 @@ import asyncio
 import logging
 import pickle
 from concurrent.futures.process import ProcessPoolExecutor
-
 import websockets
 from processors.client_process import process
-
 import json
 import argparse
 
@@ -13,8 +11,6 @@ task_executor = ProcessPoolExecutor(max_workers=3)
 
 
 async def producer(websocket, message):
-    # log = logging.getLogger('producer')
-    # log.info('Received processed message')
     serialized_message = json.dumps(message)
     logging.debug('serial ' + str(serialized_message))
     try:
@@ -23,9 +19,8 @@ async def producer(websocket, message):
         logging.debug('producer exception catch ' + str(e))
 
 
-async def listener(websocket, path):
-    if path == '/process':
-
+async def listener(websocket):
+    if websocket.request.path == '/process':
         async for message in websocket:
             print('Starting local model updating')
             job_data = pickle.loads(message)
@@ -34,21 +29,22 @@ async def listener(websocket, path):
             await websocket.close()
 
 
-
-if __name__ == "__main__":
-
+async def start_client(port):
     try:
-        parser = argparse.ArgumentParser("client")
-        parser.add_argument("port", help="Define a valid port for the  client to run on", type=int)
-        args = parser.parse_args()
-        print('client running on ' + str(args.port))
-        start_server = websockets.serve(listener, "0.0.0.0", args.port, ping_timeout=None, max_size=None)
-        loop = asyncio.get_event_loop()
-
-        loop.run_until_complete(start_server)
-        loop.run_forever()
+        print('client running on ' + str(port))
+        server = await websockets.serve(listener, "0.0.0.0", port, ping_timeout=None, max_size=None)
+        await server.wait_closed()
     except Exception as e:
         print(f'Caught exception {e}')
-        pass
-    finally:
-        loop.close()
+        raise
+
+
+if __name__ == "__main__":
+    try:
+        parser = argparse.ArgumentParser(description="client")
+        parser.add_argument("port", help="Define a valid port for the client to run on", type=int)
+        args = parser.parse_args()
+
+        asyncio.run(start_client(args.port))
+    except Exception as e:
+        print(f'Caught exception {e}')

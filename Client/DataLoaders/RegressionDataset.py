@@ -6,22 +6,6 @@ import numpy as np
 class RegressionDataset(Dataset):
 
     def __init__(self, dataset, labels, scaler=None):
-
-        # self.original_data = dataset
-        #
-        # # Initialize or use provided scaler
-        # if scaler is None:
-        #     self.scaler = MinMaxScaler(feature_range=(0, 1))
-        #     # Reshape to 2D for fitting scaler
-        #     reshaped_data = dataset.reshape(-1, dataset.shape[-1])
-        #     self.scaler.fit(reshaped_data)
-        # else:
-        #     self.scaler = scaler
-        #
-        # # Transform data
-        # reshaped_data = dataset.reshape(-1, dataset.shape[-1])
-        # normalized_data = self.scaler.transform(reshaped_data)
-        # self.dataset = normalized_data.reshape(dataset.shape)
         self.dataset = dataset
         self.labels = labels
 

@@ -4,4 +4,6 @@ scikit-learn
 bson
 tqdm
 requests
-pytorch
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision

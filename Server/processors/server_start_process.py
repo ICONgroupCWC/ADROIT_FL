@@ -11,13 +11,13 @@ import importlib
 import inspect
 from pathlib import Path
 import sys
-from Server.utils.modelUtil import dequantize_tensor, decompress_tensor
+from utils.modelUtil import dequantize_tensor, decompress_tensor
 import pickle
-from Server.DataLoaders.loaderUtil import getDataloader
-from Server.utils.message_utils import create_message, create_message_results
-from Server.utils.modelUtil import get_criterion
-from Server.utils.Scheduler import Scheduler
-from Server.utils.wireless_utils import calculate_energy_per_round
+from DataLoaders.loaderUtil import getDataloader
+from utils.message_utils import create_message, create_message_results
+from utils.modelUtil import get_criterion
+from utils.Scheduler import Scheduler
+from utils.wireless_utils import calculate_energy_per_round
 import time
 
 
@@ -42,14 +42,6 @@ class JobServer:
     def testing(self, model, preprocessing, bs, criterion):
 
         dataset, labels = self.load_dataset(preprocessing['folder'])
-        # scaler = MinMaxScaler(feature_range=(0, 1))
-        # # Reshape to 2D for fitting scaler
-        # print('dataset shape before transforming ' + str(dataset.shape))
-        # reshaped_data = dataset.reshape(-1, dataset.shape[-1])
-        # print('reshape shape ' + str(dataset.shape))
-        # scaled_data = scaler.fit_transform(reshaped_data)
-        # # Reshape back to original shape
-        # dataset = scaled_data.reshape(dataset.shape)
         test_loss = 0
         correct = 0
         test_loader = DataLoader(getDataloader(dataset, labels, preprocessing), batch_size=bs, shuffle=False)
@@ -57,7 +49,7 @@ class JobServer:
         with torch.no_grad():
             for data, label in test_loader:
                 output = model(data)
-                label = np.squeeze(label)
+                # label = np.squeeze(label)
                 loss = criterion(output, label)
                 test_loss += loss.item() * data.size(0)
                 if preprocessing['dtype'] != 'regression':
@@ -69,28 +61,17 @@ class JobServer:
             if preprocessing['dtype'] != 'regression':
                 test_accuracy = 100. * correct / len(test_loader.dataset)
             else:
-                # Convert tensors to numpy and ensure they're the right shape
-                print("Output shape:", output.shape)
-                print("Label shape:", label.shape)
 
-                predicted_values = output.detach().cpu().numpy().squeeze()
-                # predicted_values = predicted_values.reshape(-1, 1)
-                # predicted_values = scaler.inverse_transform(predicted_values)
+                predicted_values = output.detach().cpu().numpy()
                 actual_values = label.detach().cpu().numpy()
-
                 # Round the values
                 predicted_int = np.rint(predicted_values)
                 y_test_int = np.rint(actual_values)
-
-                print("Sample predictions:", predicted_int[:5])
-                print("Sample actuals:", y_test_int[:5])
                 # Calculate matches
                 matches = np.sum(predicted_int == y_test_int)
                 total = len(y_test_int)
 
                 print(f"Matches: {matches}, Total: {total}")
-
-                # Calculate accuracy properly
                 test_accuracy = (matches / total) * 100
 
         return test_loss, test_accuracy
@@ -209,7 +190,7 @@ class JobServer:
 
             tasks = []
             if curr_round > 0:
-                print('Broadcasting aggregated model to to clients')
+                print('Broadcasting global model to to clients')
             for client in clients:
                 client_uri = 'ws://' + str(client['client_ip']) + '/process'
                 serialized_data = create_message(B, eta, E, data['file'], job_data['modelParam'],
@@ -279,13 +260,15 @@ class JobServer:
                 if compress and compress == 'quantize':
                     model_size_bits = sum(p.numel() for p in model.parameters()) * int(job_data['modelParam']['num_bits'])
                     energy_per_round = calculate_energy_per_round(model_size_bits, data['avg_bitrate'])
+                    total_energy = energy_per_round * T
                 else:
                     model_size_bits = sum(p.numel() for p in model.parameters()) * 32
                     energy_per_round = calculate_energy_per_round(model_size_bits, data['avg_bitrate'])
-                print('energy per round ' + str(energy_per_round))
+                    total_energy = energy_per_round * T
+                print(f'total energy spent {total_energy:.2f} Joules')
                 serialized_results = create_message_results(test_accuracy, train_loss, test_loss, curr_round,
                                                             round_times,
-                                                            total_bytes, True, energy=energy_per_round)
+                                                            total_bytes, True, energy_per_round=energy_per_round, total_energy=total_energy)
             else:
                 serialized_results = create_message_results(test_accuracy, train_loss, test_loss, curr_round,
                                                             round_times,

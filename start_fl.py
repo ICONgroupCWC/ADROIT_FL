@@ -14,6 +14,7 @@ async def start_fl():
         network_data = yaml.safe_load(file)
 
     host_ip = network_data['host']
+    print(network_data['clients'])
     uri = "ws://" + str(host_ip) + "/job_receive"
     lr = 0.001
     task_name = 'mnist_fl'
@@ -31,7 +32,7 @@ async def start_fl():
             "general": {"task": str(task_name), "algo": "regression",
                         "host": str(host_ip),
                         "clients": network_data['clients'],
-                        "plots": [None]},
+                        },
             "scheme": {"minibatch": str(minibatch), "epoch": str(epochs),
                        "lr": str(lr), "scheduler": "random", "clientFraction": str(client_fraction),
                        "minibatchtest": str(minibatch_test),

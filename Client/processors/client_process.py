@@ -13,12 +13,9 @@ from utils.modelUtil import quantize_tensor, compress_tensor
 
 
 def load_dataset(folder):
-    mnist_data_train = np.load('data/' + str(folder) + '/X.npy')
-    mnist_labels = np.load('data/' + str(folder) + '/y.npy')
-    print("=== Data Loading ===")
-    print("X shape:", mnist_data_train.shape)
-    print("y shape:", mnist_labels.shape)
-    return mnist_data_train, mnist_labels
+    data_train = np.load('data/' + str(folder) + '/X.npy')
+    labels = np.load('data/' + str(folder) + '/y.npy')
+    return data_train, labels
 
 
 async def process(job_data, websocket):
@@ -57,15 +54,11 @@ async def process(job_data, websocket):
     criterion = job_data[4]['loss']
     compress = job_data[4]['compress']
     dataops = job_data[5]
-    print('dataops ' + str(dataops))
     global_weights = job_data[-1]
     model.load_state_dict(global_weights)
     torch.save(model.state_dict(), 'model.pt')
     server_model = copy.deepcopy(model)
     ds, labels = load_dataset(dataops['folder'])
-    print("=== Before ClientUpdate ===")
-    print("Dataset shape:", ds.shape)
-    print("Labels shape:", labels.shape)
     client = ClientUpdate(dataset=ds, batchSize=B, learning_rate=eta, epochs=E, labels=labels, optimizer_type=optimizer,
                           criterion=criterion, dataops=dataops)
 
