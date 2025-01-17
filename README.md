@@ -112,6 +112,7 @@ The system uses WebSocket connections for bidirectional communication:
    }
    ```
 
+Alternatively run `start_fl.py` file to send a request to the PS by changing parameters inside the file and network parameters in the `network_config.yml` file. 
 2. **Client Selection**
    - PS selects a fraction of available clients based on `client_fraction`
    - Selected clients receive the initial model parameters
