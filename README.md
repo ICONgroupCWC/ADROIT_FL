@@ -35,7 +35,7 @@ cd Server
 docker build -t websocket-server .
 
 # Run the server with number of expected clients (e.g., 3 clients)
-docker run -p 8200:8200 websocket-server 3
+docker run -p 8200:8200 websocket-server --num_ues 3
 ```
 
 ### Starting Client Nodes
