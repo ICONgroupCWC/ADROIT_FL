@@ -17,7 +17,7 @@ from DataLoaders.loaderUtil import getDataloader
 from utils.message_utils import create_message, create_message_results
 from utils.modelUtil import get_criterion
 from utils.Scheduler import Scheduler
-from utils.wireless_utils import calculate_energy_per_round
+from utils.wireless_utils import calculate_energy
 import time
 
 
@@ -32,6 +32,8 @@ class JobServer:
         self.v, self.i, self.s = [], [], []
         self.bytes = []
         self.comp_len = 0
+        self.cumulative_size_uploaded_Mbytes = 0
+        self.cumulative_size_uploaded_Mbytes_array = []
 
     def load_dataset(self, folder):
 
@@ -44,6 +46,7 @@ class JobServer:
         dataset, labels = self.load_dataset(preprocessing['folder'])
         test_loss = 0
         correct = 0
+        total_samples = 0
         test_loader = DataLoader(getDataloader(dataset, labels, preprocessing), batch_size=bs, shuffle=False)
         model.eval()
         with torch.no_grad():
@@ -52,14 +55,16 @@ class JobServer:
                 # label = np.squeeze(label)
                 loss = criterion(output, label)
                 test_loss += loss.item() * data.size(0)
-                if preprocessing['dtype'] != 'regression':
-                    _, pred = torch.max(output, 1)
-                    correct += pred.eq(label.data.view_as(pred)).sum().item()
+                # if preprocessing['dtype'] != 'regression':
+                _, pred = torch.max(output, 1)
+
+                # correct += pred.eq(label.data.view_as(pred)).sum().item()
+                correct += (pred == label).sum().item()
+                total_samples += label.size(0)
 
             test_loss /= len(test_loader.dataset)
-            print('test loss ' + str(test_loss))
             if preprocessing['dtype'] != 'regression':
-                test_accuracy = 100. * correct / len(test_loader.dataset)
+                test_accuracy = 100. * correct / total_samples
             else:
 
                 predicted_values = output.detach().cpu().numpy()
@@ -76,8 +81,6 @@ class JobServer:
 
         return test_loss, test_accuracy
 
-
-
     async def connector(self, client_uri, data, client_index, server_socket):
         """connector function for connecting the server to the clients. This function is called asynchronously to
         1. send process requests to each client
@@ -90,8 +93,9 @@ class JobServer:
                 start = time.time()
                 while not finished:
                     async for message in websocket:
+                        self.cumulative_size_uploaded_Mbytes += (sys.getsizeof(
+                            message) / 1e6)  # sys.getsizeof() return the size of an object in bytes
                         try:
-
                             data = pickle.loads(message)
                             self.bytes.append(len(message))
                             if len(data) == 2:
@@ -113,14 +117,15 @@ class JobServer:
 
                             finished = True
                             self.new_latencies[0, client_index] = time.time() - start
+
                             break
 
                         except Exception as e:
 
                             await server_socket.send(message)
 
-
             except Exception as e:
+
                 pass
 
     async def start_job(self, data, websocket):
@@ -180,7 +185,8 @@ class JobServer:
         for curr_round in range(1, T + 1):
             start_time = time.time()
             # TODO need to check
-            print('current communication round ' + str(curr_round))
+            print('---------------------')
+            print('Current communication round: ' + str(curr_round))
             # S_t = np.random.choice(range(K), m, replace=False)
             S_t = scheduler.get_workers(self.new_latencies)
             self.new_latencies = np.ones((1, K), dtype='float')
@@ -190,7 +196,8 @@ class JobServer:
 
             tasks = []
             if curr_round > 0:
-                print('Broadcasting global model to to clients')
+                print('1- PS Broadcasting global model to the clients')
+            print('2- Local model training at clients\' side started')
             for client in clients:
                 client_uri = 'ws://' + str(client['client_ip']) + '/process'
                 serialized_data = create_message(B, eta, E, data['file'], job_data['modelParam'],
@@ -199,15 +206,13 @@ class JobServer:
                 tasks.append(self.connector(client_uri, serialized_data, client_index, websocket))
                 st_count += 0
             await asyncio.gather(*tasks)
-            print('Received model updates from clients')
+            print('3- Local model training at clients\' side finished')
             if compress:
-
+                print('4- PS recovering and aggregating the received local models')
                 for i in range(self.comp_len):
-
                     count = 0
                     for server_param in model.parameters():
                         if compress == 'quantize':
-
                             z_point = float(job_data['modelParam']['z_point'])
                             scale = float(job_data['modelParam']['scale'])
                             server_param.data += dequantize_tensor(self.q_diff[i][count], scale, z_point,
@@ -218,7 +223,7 @@ class JobServer:
                 global_weights = model.state_dict()
 
             else:
-                print('Aggregating local models')
+                print('4- PS aggregating received local models')
                 # TODO local weights are not reset check it
                 weights_avg = copy.deepcopy(self.local_weights[0])
                 for k in weights_avg.keys():
@@ -231,13 +236,18 @@ class JobServer:
             # torch.save(model.state_dict(), "./ModelData/" + str(job_id) + '/model.pt')
             torch.save(model.state_dict(), 'model.pt')
             model.load_state_dict(global_weights)
-
             loss_avg = sum(self.local_loss) / len(self.local_loss)
             train_loss.append(loss_avg)
-
             g_loss, g_accuracy = self.testing(model, preprocessing, B_test, criterion)
-            print('calculated test accuracy at round ' + str(curr_round) + ' = ' + str(g_accuracy))
-            print('calculated test loss at round ' + str(curr_round) + ' = ' + str(g_loss))
+            self.cumulative_size_uploaded_Mbytes_array.append(self.cumulative_size_uploaded_Mbytes)
+            cumulative_energy = calculate_energy(self.cumulative_size_uploaded_Mbytes, data['avg_bitrate'])
+            print('<<< Summary of round ' + str(curr_round) + ' >>>')
+            print('Test accuracy: ', "{:.2f}".format(g_accuracy), '%')
+            print('Test loss: ', "{:.2f}".format(g_loss))
+            print('Cumulative size of transmitted data to the PS: ',
+                  "{:.2f}".format(self.cumulative_size_uploaded_Mbytes), ' MB')
+            print('Cumulative communication energy: ', "{:.2f}".format(cumulative_energy), ' Joules')
+            print('<<< End summary of round ' + str(curr_round) + ' >>>')
             test_loss.append(g_loss)
             test_accuracy.append(g_accuracy)
             elapsed_time = round(time.time() - start_time, 2)
@@ -253,27 +263,31 @@ class JobServer:
                 tot_bytes = self.bytes[-1] / 1e6
             total_bytes.append(round(tot_bytes, 2))
 
-
             if curr_round == T:
-
                 print('FL training completed. Final model saved at clients')
+                total_energy = calculate_energy(self.cumulative_size_uploaded_Mbytes, data['avg_bitrate'])
+                print(f'Total communication energy consumed during', T, 'rounds of training: ',
+                      "{:.2f}".format(total_energy), ' Joules', f"with average bit rate: {data['avg_bitrate']:.2f}",
+                      'bps')
+
+                energy_per_round = calculate_energy(self.cumulative_size_uploaded_Mbytes_array[0], data['avg_bitrate'])
+                '''
                 if compress and compress == 'quantize':
                     model_size_bits = sum(p.numel() for p in model.parameters()) * int(job_data['modelParam']['num_bits'])
                     energy_per_round = calculate_energy_per_round(model_size_bits, data['avg_bitrate'])
                     total_energy = energy_per_round * T
                 else:
-                    model_size_bits = sum(p.numel() for p in model.parameters()) * 32
+                    model_size_bits = sum(p.numel() for p in model.parameters()) * 32         
                     energy_per_round = calculate_energy_per_round(model_size_bits, data['avg_bitrate'])
                     total_energy = energy_per_round * T
-                print(f'total energy spent {total_energy:.2f} Joules')
+                '''
                 serialized_results = create_message_results(test_accuracy, train_loss, test_loss, curr_round,
                                                             round_times,
-                                                            total_bytes, True, energy_per_round=energy_per_round, total_energy=total_energy)
+                                                            total_bytes, True, energy_per_round=energy_per_round,
+                                                            total_energy=total_energy)
             else:
                 serialized_results = create_message_results(test_accuracy, train_loss, test_loss, curr_round,
                                                             round_times,
                                                             total_bytes, False)
-
-
 
             await websocket.send(serialized_results)

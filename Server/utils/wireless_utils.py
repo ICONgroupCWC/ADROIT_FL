@@ -49,6 +49,14 @@ def calculate_energy_per_round(model_size, avg_bit_rate):
     transmission_time = model_size / avg_bit_rate  # Time to transmit the model
     energy_per_round = Pt * transmission_time  # Energy consumption
 
-    print(f"Energy Required to Transmit the Model: {energy_per_round:.2f} Joules per round with average bit rate {avg_bit_rate:.2f}")
-
     return energy_per_round
+
+def calculate_energy(model_size, avg_bit_rate):
+    model_size_in_bits = model_size * 1e6
+    with open('utils/wireless_parameters.yml', 'r') as file:
+        wireless_data = yaml.safe_load(file)
+    Pt = float(wireless_data['transmission_power'])
+    transmission_time = model_size_in_bits / avg_bit_rate  # Time to transmit the model
+    cumulative_energy = Pt * transmission_time  # Energy consumption
+
+    return cumulative_energy

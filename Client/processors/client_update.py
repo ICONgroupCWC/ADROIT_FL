@@ -8,7 +8,7 @@ import numpy as np
 
 class ClientUpdate(object):
     def __init__(self, dataset, batchSize, learning_rate, epochs, labels, optimizer_type, criterion, dataops):
-        self.train_loader = DataLoader(getDataloader(dataset, labels, dataops), batch_size=batchSize, shuffle=True)
+        self.train_loader = DataLoader(getDataloader(dataset, labels, dataops), batch_size=batchSize, shuffle=False)
         self.learning_rate = learning_rate
         self.epochs = epochs
         self.optimizer_type = optimizer_type

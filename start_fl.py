@@ -22,7 +22,7 @@ async def start_fl():
     minibatch = 64
     client_fraction = 0.7
     minibatch_test = 4096
-    comm_rounds = 1
+    comm_rounds = 20
     optimizer = 'Adam'
     loss = 'Huber'
     folder = 'satellite'
@@ -80,6 +80,7 @@ async def start_fl():
                         total_bytes.append(t_bytes)
 
                     final_round = message['final']
+                    print(f'total elapsed time {float(round_time[-1]):.2f}')
 
                 if final_round:
                     rounds = np.array([i for i in range(1, len(test_accuracy) + 1)])
